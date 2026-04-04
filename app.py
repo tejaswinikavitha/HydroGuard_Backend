@@ -216,14 +216,19 @@ def register():
 
         hashed_password = generate_password_hash(password)
 
-        # ✅ FIXED: using 'district' column
+         # ✅ INSERT QUERY HERE
         cursor.execute("""
-            INSERT INTO users
-            (full_name, email, password_hash, role, district)
+            INSERT INTO users (full_name, email, password_hash, role, district)
             VALUES (%s, %s, %s, %s, %s)
-        """, (full_name, email, hashed_password, role, district))
+        """, (full_name, email, password, role, district))
 
         conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "User registered successfully"
+        })
+
 
         return jsonify({"status": "success", "message": "User registered successfully"}), 201
 
@@ -1207,14 +1212,15 @@ def admin_patient_cases():
                     location,
                     symptoms,
                     disease_type,
-                    risk_level AS severity
+                    severity,
+                    status
                 FROM patient_cases
             """
 
             params = ()
             # Apply severity filter if provided
-            if severity_filter in ("low", "moderate", "high"):
-                query += " WHERE LOWER(risk_level)=%s"
+            if severity_filter in ("mild", "moderate", "severe", "low", "high"):
+                query += " WHERE LOWER(severity)=%s"
                 params = (severity_filter,)
 
             query += " ORDER BY case_id DESC"
@@ -1224,17 +1230,16 @@ def admin_patient_cases():
             # Format cases for Android frontend
             formatted_cases = []
             for case in cases:
-                # Convert symptoms string to list
-                symptoms_list = [s.strip() for s in case['symptoms'].split(',')] if case['symptoms'] else []
                 formatted_cases.append({
                     "caseId": case["case_id"],
                     "patientName": case["patient_name"],
                     "age": case["age"],
                     "gender": case["gender"],
                     "location": case["location"],
-                    "symptoms": symptoms_list,
+                    "symptoms": case["symptoms"],
                     "diseaseType": case["disease_type"],
-                    "severity": case["severity"]
+                    "severity": case["severity"],
+                    "status": case["status"]
                 })
 
         return jsonify({"status": "success", "cases": formatted_cases})
@@ -1357,8 +1362,9 @@ def get_report_details(report_id):
                 SELECT 
                     r.report_id,
                     u.full_name AS citizen_name,
-                    r.location_desc AS location,
-                    r.issue_type AS water_source,
+                    r.district AS location,
+                    r.location_desc AS water_source,
+                    r.issue_type AS incident_type,
                     r.risk_level,
                     r.reported_at AS report_date,
                     r.status AS report_status,
@@ -1579,6 +1585,352 @@ def change_password():
     finally:
         conn.close()
 
+# @app.route('/get-hw-patient-cases/<int:user_id>', methods=['GET'])
+# def get_hw_patient_cases(user_id):
+#     try:
+#         print("✅ API HIT:", user_id)
+
+#         conn = get_connection()
+#         cursor = conn.cursor()
+
+#         cursor.execute("""
+#             SELECT 
+#                 case_id,
+#                 patient_name,
+#                 symptoms,
+#                 location,
+#                 status
+#             FROM patient_cases
+#             WHERE health_worker_id = %s
+#         """, (user_id,))
+
+#         rows = cursor.fetchall()
+#         print("ROWS:", rows)
+
+#         cases = []
+#         for row in rows:
+#             # ✅ SAFE ACCESS (NO UNPACK ERROR)
+#             cases.append({
+#                 "caseId": row[0],
+#                 "patientName": row[1],
+#                 "symptoms": row[2],
+#                 "location": row[3],
+#                 "status": row[4]
+#             })
+
+#         cursor.close()
+#         conn.close()
+
+#         return {
+#             "status": "success",
+#             "cases": cases
+#         }
+
+#     except Exception as e:
+#         print("ERROR:", e)
+#         return {
+#             "status": "error",
+#             "message": str(e)
+#         }
+@app.route('/get-hw-patient-cases/<int:user_id>', methods=['GET'])
+def get_hw_patient_cases(user_id):
+    try:
+        print("API USER_ID:", user_id)   # ✅ DEBUG
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT case_id, patient_name, symptoms, location, status
+            FROM patient_cases
+            WHERE health_worker_id = %s
+        """, (user_id,))
+
+        rows = cursor.fetchall()
+
+        # Format for Android app (camelCase keys and success status)
+        formatted_cases = []
+        for row in rows:
+            formatted_cases.append({
+                "caseId": row.get("case_id"),
+                "patientName": row.get("patient_name"),
+                "symptoms": row.get("symptoms"),
+                "location": row.get("location"),
+                "status": row.get("status")
+            })
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "status": "success",
+            "cases": formatted_cases
+        })
+
+    except Exception as e:
+        print("GET HW CASES ERROR:", e)
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+# @app.route('/update-status/<int:case_id>', methods=['PUT'])
+# def update_case_status(case_id):
+#     try:
+#         data = request.get_json()
+#         status = data.get('status')   # "Completed"
+
+#         conn = get_connection()
+#         cursor = conn.cursor()
+
+#         cursor.execute("""
+#             UPDATE patient_cases 
+#             SET status = %s 
+#             WHERE case_id = %s
+#         """, (status, case_id))   # ✅ directly store "Completed"
+
+#         conn.commit()
+
+#         return jsonify({
+#             "status": "success",
+#             "message": "Status updated"
+#         })
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)})
+# @app.route('/update-status/<int:case_id>', methods=['PUT'])
+# def update_case_status(case_id):
+#     try:
+#         data = request.get_json()
+#         status = data.get('status')
+
+#         if not status:
+#             return jsonify({"error": "Status is missing"}), 400
+
+#         conn = get_connection()
+#         cursor = conn.cursor()
+
+#         cursor.execute("""
+#             UPDATE patient_cases 
+#             SET status = %s 
+#             WHERE case_id = %s
+#         """, (status, case_id))
+
+#         conn.commit()
+
+#         cursor.close()
+#         conn.close()
+
+#         return jsonify({
+#             "status": "success",
+#             "message": "Status updated successfully"
+#         })
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+# @app.route('/update-status/<int:case_id>', methods=['PUT'])
+# def update_case_status(case_id):
+#     try:
+#         data = request.get_json()
+#         status = data.get('status')
+
+#         if not status:
+#             return jsonify({"error": "Status is missing"}), 400
+
+#         conn = get_connection()
+#         cursor = conn.cursor()
+
+#         cursor.execute("""
+#             UPDATE patient_cases 
+#             SET status = %s 
+#             WHERE case_id = %s
+#         """, (status, case_id))
+
+#         conn.commit()
+
+#         print("ROWS AFFECTED:", cursor.rowcount)  # DEBUG
+
+#         cursor.close()
+#         conn.close()
+
+#         return jsonify({
+#             "status": "success",
+#             "message": "Status updated successfully"
+#         })
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+# @app.route('/update-status/<int:case_id>', methods=['PUT'])
+# def update_case_status(case_id):
+#     try:
+#         # ❌ remove this (optional)
+#         # data = request.get_json()
+#         # status = data.get('status')
+
+#         # ✅ force completed
+#         status = "completed"
+
+#         conn = get_connection()
+#         cursor = conn.cursor()
+
+#         cursor.execute("""
+#             UPDATE patient_cases 
+#             SET status = %s 
+#             WHERE case_id = %s
+#         """, (status, case_id))
+
+#         conn.commit()
+
+#         print("ROWS AFFECTED:", cursor.rowcount)
+
+#         cursor.close()
+#         conn.close()
+
+#         return jsonify({
+#             "status": "success",
+#             "message": "Marked as completed"
+#         })
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+    
+@app.route('/update-case-status/<int:case_id>', methods=['PUT'])
+def update_case_status(case_id):
+    try:
+        data = request.get_json(force=True)
+        status = data.get('status')
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = "UPDATE patient_cases SET status = %s WHERE case_id = %s"
+        values = (status, case_id)
+
+        cursor.execute(query, values)
+        conn.commit()
+
+        print("Updated:", case_id, status)
+        print("Rows:", cursor.rowcount)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({"status": "success"})
+
+    except Exception as e:
+        print("ERROR:", e)
+        return jsonify({"status": "error", "message": str(e)})
+    
+# @app.route('/admin/get-all-cases', methods=['GET'])
+# def get_all_cases():
+#     conn = get_connection()
+#     cursor = conn.cursor()
+
+#     cursor.execute("""
+#         SELECT case_id, patient_name, status 
+#         FROM patient_cases
+#     """)
+
+#     rows = cursor.fetchall()
+
+#     return jsonify(rows)
+@app.route('/admin/get-all-cases', methods=['GET'])
+def get_all_cases():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT case_id, patient_name, status 
+        FROM patient_cases
+    """)
+
+    rows = cursor.fetchall()
+
+    cases = []
+    for row in rows:
+        cases.append({
+    "case_id": row["case_id"],
+    "patient_name": row["patient_name"],
+    "status": row["status"]
+    })
+
+    cursor.close()
+    conn.close()
+
+    return jsonify({"status": "success", "cases": cases})
+
+# @app.route("/citizen-reports/<int:user_id>", methods=["GET"])
+# def get_citizen_reports(user_id):
+#     conn = get_connection()
+#     if conn is None:
+#         return jsonify({"status": "error", "message": "Database connection failed"}), 500
+
+#     try:
+#         cursor = conn.cursor()
+
+#         query = """
+#         SELECT report_id,
+#                user_id,
+#                issue_type AS issueType,
+#                location_desc,
+#                description,
+#                photo_url AS photoUrl,
+#                status,
+#                risk_level AS riskLevel,
+#                reported_at
+#         FROM citizen_reports
+#         WHERE user_id = %s
+#         ORDER BY reported_at DESC
+#         """
+#         cursor.execute(query, (user_id,))
+#         reports = cursor.fetchall()  # Already dicts thanks to DictCursor
+
+#         cursor.close()
+#         conn.close()
+
+#         return jsonify({
+#             "status": "success",
+#             "reports": reports
+#         })
+
+#     except Exception as e:
+#         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/citizen-reports", methods=["GET"])
+def get_citizen_reports():
+    conn = get_connection()
+    if conn is None:
+        return jsonify({"status": "error", "message": "Database connection failed"}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        query = """
+        SELECT report_id,
+               user_id,
+               issue_type AS issueType,
+               location_desc,
+               description,
+               photo_url AS photoUrl,
+               status,
+               risk_level AS riskLevel,
+               reported_at
+        FROM citizen_reports
+        ORDER BY reported_at DESC
+        """
+        cursor.execute(query)
+
+        reports = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "status": "success",
+            "reports": reports
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 # ==========================================================
 #  RUN SERVER
 # ==========================================================
