@@ -8,7 +8,7 @@ import random
 from flask_mail import Mail, Message
 from werkzeug.utils import secure_filename
 import json 
-from werkzeug.security import generate_password_hash
+
 
 
 from flask_cors import CORS
@@ -26,10 +26,9 @@ app.secret_key = "supersecretkey"
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'mudesai09@gmail.com'
+app.config['MAIL_USERNAME'] = 'mudesai09@gmail.com' 
 app.config['MAIL_PASSWORD'] = 'otffxqwlewzddbbn'
 mail = Mail(app)
-
 # ================================
 # PHOTO UPLOAD CONFIG
 # ================================
@@ -163,119 +162,78 @@ def health_check():
 
 #     finally:
 #         conn.close()
-@app.route("/register", methods=["POST"])
-def register():
-    data = request.get_json(silent=True) or {}
+# 1. AUTHENTICATION
+# @app.route('/register', methods=['POST'])
+# def register():
+#     data = request.get_json()
 
-    full_name = data.get("full_name")
-    email = data.get("email")
-    password = data.get("password")
-    confirm_password = data.get("confirm_password")
-    district = data.get("district") or data.get("location")
-    # district = data.get("location")   # ✅ renamed for clarity
-    role_input = data.get("role") or "citizen"
+#     full_name = data.get('full_name')
+#     email = data.get('email')
+#     password = data.get('password')
+#     district = data.get('district')
+#     role = data.get('role', 'citizen')
 
-    if not full_name or not email or not password or not confirm_password or not district:
-        return jsonify({"status": "error", "message": "All fields are required"}), 400
+#     # ✅ Validation
+#     if not all([full_name, email, password, district]):
+#         return jsonify({"status": "error", "message": "All fields are required"}), 400
 
-    # Normalize role
-    role = role_input.lower().replace(" ", "_")
-    if role not in ["citizen", "health_worker", "admin"]:
-        role = "citizen"
-
-    if not re.match(r"^[A-Za-z\s]+$", full_name):
-        return jsonify({"status": "error", "message": "Full name must contain only letters and spaces"}), 400
-
-    email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
-    if not re.match(email_pattern, email):
-        return jsonify({"status": "error", "message": "Invalid email format"}), 400
-
-    missing_requirements = validate_password(password)
-    if missing_requirements:
-        return jsonify({
-            "status": "error",
-            "message": f"Password must contain: {', '.join(missing_requirements)}"
-        }), 400
-
-    if password != confirm_password:
-        return jsonify({"status": "error", "message": "Passwords do not match"}), 400
-
-    conn = get_connection()
-    if not conn:
-        return jsonify({"status": "error", "message": "DB connection failed"}), 500
-
-    try:
-        cursor = conn.cursor()
-
-        # Check if email already exists
-        cursor.execute("SELECT user_id FROM users WHERE email=%s", (email,))
-        existing_user = cursor.fetchone()
-
-        if existing_user:
-            return jsonify({"status": "error", "message": "Mail already registered"}), 409
-
-        hashed_password = generate_password_hash(password)
-
-         # ✅ INSERT QUERY HERE
-        cursor.execute("""
-            INSERT INTO users (full_name, email, password_hash, role, district)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (full_name, email, password, role, district))
-
-        conn.commit()
-
-        return jsonify({
-            "status": "success",
-            "message": "User registered successfully"
-        })
-
-
-        return jsonify({"status": "success", "message": "User registered successfully"}), 201
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-    finally:
-        conn.close()
-# ==========================================================
-# ✅ LOGIN
-# ==========================================================
-# @app.route("/login", methods=["POST"])
-# def login():
-#     data = request.get_json(silent=True) or {}
-
-#     email = data.get("email")
-#     password = data.get("password")
-
-#     if not email or not password:
-#         return jsonify({"status": "error", "message": "Email and password are required"}), 400
-
-#     email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
-#     if not re.match(email_pattern, email):
-#         return jsonify({"status": "error", "message": "Invalid email format"}), 400
+#     # 🔐 Hash password
+#     hashed_password = generate_password_hash(password)
 
 #     conn = get_connection()
-#     if not conn:
-#         return jsonify({"status": "error", "message": "DB connection failed"}), 500
+#     cursor = conn.cursor()
 
 #     try:
-#         with conn.cursor() as cursor:
+#         # ✅ Check if email already exists
+#         cursor.execute("SELECT user_id FROM users WHERE email=%s", (email,))
+#         if cursor.fetchone():
+#             return jsonify({"status": "error", "message": "Email already exists"}), 409
 
-#             cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
-#             user = cursor.fetchone()
+#         # ✅ Insert user (FIXED)
+#         cursor.execute("""
+#             INSERT INTO users (full_name, email, password_hash, role, district)
+#             VALUES (%s, %s, %s, %s, %s)
+#         """, (full_name, email, hashed_password, role.lower(), district))
 
-#             if not user:
-#                 return jsonify({
-#                     "status": "error",
-#                     "message": "Email is not registered. Please create an account."
-#                 }), 404
+#         conn.commit()
 
-#             if not check_password_hash(user["password_hash"], password):
-#                 return jsonify({
-#                     "status": "error",
-#                     "message": "Incorrect password. Please try again."
-#                 }), 401
+#         return jsonify({
+#             "status": "success",
+#             "message": "User registered successfully"
+#         }), 201
 
+#     except Exception as e:
+#         return jsonify({
+#             "status": "error",
+#             "message": str(e)
+#         }), 500
+
+#     finally:
+#         cursor.close()
+#         conn.close()
+# @app.route('/login', methods=['POST'])
+# def login():
+#     data = request.get_json()
+
+#     email = data.get('email')
+#     password = data.get('password')
+
+#     if not email or not password:
+#         return jsonify({
+#             "status": "error",
+#             "message": "Email and password are required"
+#         }), 400
+
+#     conn = get_connection()
+#     cursor = conn.cursor()
+
+#     try:
+#         # ✅ FIXED QUERY (MySQL style)
+#         cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
+#         user = cursor.fetchone()
+
+#         # 🔐 Check password
+#         if user and check_password_hash(user['password_hash'], password):
 #             return jsonify({
 #                 "status": "success",
 #                 "message": "Login successful",
@@ -284,236 +242,350 @@ def register():
 #                     "full_name": user["full_name"],
 #                     "email": user["email"],
 #                     "role": user["role"],
-#                     "district": user["assigned_district"]
+#                     "district": user["district"]
 #                 }
 #             }), 200
 
+#         return jsonify({
+#             "status": "error",
+#             "message": "Invalid credentials"
+#         }), 401
+
 #     finally:
+#         cursor.close()
 #         conn.close()
-@app.route("/login", methods=["POST"])
-def login():
-    data = request.get_json(silent=True) or {}
+# ✅ REGISTER
+# ==========================================================
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
 
-    email = data.get("email")
-    password = data.get("password")
+    full_name = data.get('full_name')
+    email = data.get('email')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
+    district = data.get('district')
+    role = data.get('role', 'citizen').lower()
 
-    if not email or not password:
-        return jsonify({"status": "error", "message": "Email and password are required"}), 400
+    # ✅ Required fields
+    if not all([full_name, email, password, confirm_password, district]):
+        return jsonify({"status": "error", "message": "All fields are required"}), 400
 
-    email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
-    if not re.match(email_pattern, email):
+    # ✅ Name validation
+    if not re.match(r"^[A-Za-z\s]+$", full_name):
+        return jsonify({"status": "error", "message": "Invalid full name"}), 400
+
+    # ✅ Email validation
+    if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email):
         return jsonify({"status": "error", "message": "Invalid email format"}), 400
 
+    # ✅ Password validation
+    missing = validate_password(password)
+    if missing:
+        return jsonify({
+            "status": "error",
+            "message": f"Password must contain: {', '.join(missing)}"
+        }), 400
+
+    # ✅ Confirm password
+    if password != confirm_password:
+        return jsonify({"status": "error", "message": "Passwords do not match"}), 400
+
     conn = get_connection()
-    if not conn:
-        return jsonify({"status": "error", "message": "DB connection failed"}), 500
+    cursor = conn.cursor()
 
     try:
+        # ✅ Check existing email
+        cursor.execute("SELECT user_id FROM users WHERE LOWER(email)=LOWER(%s)", (email,))
+        if cursor.fetchone():
+            return jsonify({"status": "error", "message": "Email already exists"}), 409
+
+        hashed_password = generate_password_hash(password)
+
+        cursor.execute("""
+            INSERT INTO users (full_name, email, password_hash, role, district)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (full_name, email.lower(), hashed_password, role, district))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "User registered successfully"
+        }), 201
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ==========================================================
+# ✅ LOGIN
+# ==========================================================
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({
+            "status": "error",
+            "message": "Email and password required"
+        }), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # ✅ Case-insensitive email
+        cursor.execute("SELECT * FROM users WHERE LOWER(email)=LOWER(%s)", (email,))
+        user = cursor.fetchone()
+
+        if user and check_password_hash(user['password_hash'], password):
+            return jsonify({
+                "status": "success",
+                "message": "Login successful",
+                "user": {
+                    "user_id": user["user_id"],
+                    "full_name": user["full_name"],
+                    "email": user["email"],
+                    "role": user["role"],
+                    "district": user["district"]
+                }
+            }), 200
+
+        return jsonify({
+            "status": "error",
+            "message": "Invalid credentials"
+        }), 401
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ==========================================================
+# ✅ SEND OTP (NEW API)
+# ==========================================================
+@app.route('/send-otp', methods=['POST'])
+def send_otp():
+    data = request.get_json()
+    email = data.get("email")
+
+    if not email:
+        return jsonify({"status": "error", "message": "Email required"}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT user_id FROM users WHERE email=%s", (email,))
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({"status": "error", "message": "Email not registered"}), 404
+
+        # ✅ Generate OTP
+        otp = random.randint(100000, 999999)
+        expiry = datetime.now() + timedelta(minutes=5)
+
+        # ✅ Store OTP
+        cursor.execute("""
+            UPDATE users 
+            SET otp=%s, otp_expiry=%s 
+            WHERE email=%s
+        """, (otp, expiry, email))
+
+        conn.commit()
+
+        # ✅ Send email
+        msg = Message("Your OTP Code",
+                      sender=app.config['MAIL_USERNAME'],
+                      recipients=[email])
+
+        msg.body = f"Your OTP is {otp}. It expires in 5 minutes."
+
+        mail.send(msg)
+
+        return jsonify({
+            "status": "success",
+            "message": "OTP sent successfully"
+        })
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ==========================================================
+# ✅ RESET PASSWORD
+# ==========================================================
+# @app.route('/reset-password', methods=['POST'])
+# def reset_password():
+#     data = request.get_json()
+
+#     email = data.get('email')
+#     otp = data.get('otp')
+#     new_password = data.get('new_password')
+#     confirm_password = data.get('confirm_password')
+
+#     if not all([email, otp, new_password, confirm_password]):
+#         return jsonify({"status": "error", "message": "All fields required"}), 400
+
+#     if new_password != confirm_password:
+#         return jsonify({"status": "error", "message": "Passwords do not match"}), 400
+
+#     # ✅ Password validation
+#     missing = validate_password(new_password)
+#     if missing:
+#         return jsonify({
+#             "status": "error",
+#             "message": f"Password must contain: {', '.join(missing)}"
+#         }), 400
+
+#     conn = get_connection()
+#     cursor = conn.cursor()
+
+#     try:
+#         cursor.execute("""
+#             SELECT otp, otp_expiry 
+#             FROM users 
+#             WHERE email=%s
+#         """, (email,))
+
+#         user = cursor.fetchone()
+
+#         if not user:
+#             return jsonify({"status": "error", "message": "User not found"}), 404
+
+#         # ✅ OTP check
+#         if str(user["otp"]) != str(otp):
+#             return jsonify({"status": "error", "message": "Invalid OTP"}), 400
+
+#         if user["otp_expiry"] < datetime.now():
+#             return jsonify({"status": "error", "message": "OTP expired"}), 400
+
+#         # ✅ Update password
+#         hashed_password = generate_password_hash(new_password)
+
+#         cursor.execute("""
+#             UPDATE users 
+#             SET password_hash=%s, otp=NULL, otp_expiry=NULL 
+#             WHERE email=%s
+#         """, (hashed_password, email))
+
+#         conn.commit()
+
+#         return jsonify({
+#             "status": "success",
+#             "message": "Password reset successful"
+#         })
+
+#     finally:
+#         cursor.close()
+#         conn.close()
+
+# ==========================================================
+@app.route('/reset-password', methods=['POST'])
+def reset_password():
+    try:
+        data = request.get_json(silent=True) or {}
+
+        email = data.get('email')
+        otp = data.get('otp')
+        new_password = data.get('new_password')
+        confirm_password = data.get('confirm_password')
+
+        # ✅ Validate input
+        if not all([email, otp, new_password, confirm_password]):
+            return jsonify({
+                "status": "error",
+                "message": "All fields are required"
+            }), 400
+
+        if new_password != confirm_password:
+            return jsonify({
+                "status": "error",
+                "message": "Passwords do not match"
+            }), 400
+
+        # ✅ Password strength check
+        missing = validate_password(new_password)
+        if missing:
+            return jsonify({
+                "status": "error",
+                "message": f"Password must contain: {', '.join(missing)}"
+            }), 400
+
+        conn = get_connection()
+        if not conn:
+            return jsonify({
+                "status": "error",
+                "message": "Database connection failed"
+            }), 500
+
         cursor = conn.cursor()
 
-        cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
+        # ✅ Fetch user + OTP
+        cursor.execute("""
+            SELECT otp, otp_expiry 
+            FROM users 
+            WHERE LOWER(email)=LOWER(%s)
+        """, (email,))
         user = cursor.fetchone()
 
         if not user:
             return jsonify({
                 "status": "error",
-                "message": "Email is not registered. Please create an account."
+                "message": "User not found"
             }), 404
 
-        if not check_password_hash(user["password_hash"], password):
+        # ✅ OTP validation
+        if str(user.get("otp")) != str(otp):
             return jsonify({
                 "status": "error",
-                "message": "Incorrect password. Please try again."
-            }), 401
+                "message": "Invalid OTP"
+            }), 400
+
+        # ✅ Expiry check
+        if not user.get("otp_expiry") or user["otp_expiry"] < datetime.now():
+            return jsonify({
+                "status": "error",
+                "message": "OTP expired"
+            }), 400
+
+        # ✅ Hash new password
+        hashed_password = generate_password_hash(new_password)
+
+        # ✅ Update password & clear OTP
+        cursor.execute("""
+            UPDATE users 
+            SET password_hash=%s, otp=NULL, otp_expiry=NULL 
+            WHERE LOWER(email)=LOWER(%s)
+        """, (hashed_password, email))
+
+        conn.commit()
 
         return jsonify({
             "status": "success",
-            "message": "Login successful",
-            "user": {
-                "user_id": user["user_id"],
-                "full_name": user["full_name"],
-                "email": user["email"],
-                "role": user["role"],
-                "district": user["district"]   # ✅ FIXED
-            }
+            "message": "Password reset successful"
         }), 200
 
     except Exception as e:
+        print("RESET PASSWORD ERROR:", e)
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": "Server error"
         }), 500
 
     finally:
-        conn.close()
-# ==========================================================
-# ✅ FORGOT PASSWORD (SEND OTP)
-# ==========================================================
-@app.route("/forgot-password", methods=["POST"])
-def forgot_password():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip()
-
-    if not email:
-        return jsonify({"status": "error", "message": "Email is required"}), 400
-
-    conn = get_connection()
-    if not conn:
-        return jsonify({"status": "error", "message": "DB connection failed"}), 500
-
-    try:
-        with conn.cursor() as cursor:
-
-            # Check if email exists
-            cursor.execute("SELECT user_id FROM users WHERE email=%s", (email,))
-            user = cursor.fetchone()
-
-            if not user:
-                return jsonify({"status": "error", "message": "Email not registered"}), 404
-
-            # Generate OTP
-            otp = str(random.randint(1000, 9999))
-
-            # Save OTP
-            cursor.execute(
-                "UPDATE users SET otp=%s, otp_expiry=DATE_ADD(NOW(), INTERVAL 2 MINUTE) WHERE user_id=%s",
-                (otp, user["user_id"])
-            )
-            conn.commit()
-
         try:
-            import smtplib
-            from email.message import EmailMessage
-
-            msg = EmailMessage()
-            msg.set_content(f"Your Reset Password OTP is: {otp}. It is valid for 2 minutes.")
-            msg['Subject'] = "Password Reset OTP"
-            msg['From'] = "mudesai09@gmail.com"
-            msg['To'] = email
-
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login("mudesai09@gmail.com", "otffxqwlewzddbbn")
-            server.send_message(msg)
-            server.quit()
-
-            print(f"DEBUG: Generated OTP for {email}: {otp}")
-
-        except Exception as e:
-            print("Mail Error:", e)
-            return jsonify({"status": "error", "message": f"Failed to send OTP: {str(e)}"}), 500
-
-        return jsonify({
-            "status": "success",
-            "message": "OTP sent to registered email"
-        }), 200
-
-    finally:
-        conn.close()
-# ==========================================================
-# ✅ VERIFY OTP
-# ==========================================================
-@app.route("/verify-otp", methods=["POST"])
-def verify_otp():
-    data = request.get_json(silent=True) or {}
-
-    email = (data.get("email") or "").strip()
-    otp = (data.get("otp") or "").strip()
-
-    if not email:
-        return jsonify({"status": "error", "message": "Email required"}), 400
-
-    if not otp:
-        return jsonify({"status": "error", "message": "OTP required"}), 400
-
-    conn = get_connection()
-    if not conn:
-        return jsonify({"status": "error", "message": "DB connection failed"}), 500
-
-    try:
-        with conn.cursor() as cursor:
-
-            cursor.execute(
-                """
-                SELECT otp, (otp_expiry > NOW()) AS is_valid
-                FROM users
-                WHERE email=%s
-                """,
-                (email,)
-            )
-
-            user = cursor.fetchone()
-
-            if not user:
-                return jsonify({"status": "error", "message": "User not found"}), 404
-
-            db_otp = str(user.get("otp") or "").strip()
-
-            if db_otp != otp:
-                return jsonify({"status": "error", "message": "Invalid OTP"}), 400
-
-            if not user.get("is_valid"):
-                return jsonify({"status": "error", "message": "OTP expired"}), 400
-
-        return jsonify({
-            "status": "success",
-            "message": "OTP verified. Ready to reset password."
-        }), 200
-
-    finally:
-        conn.close()
-# ==========================================================
-# ✅ RESET PASSWORD
-# ==========================================================
-@app.route("/reset-password", methods=["POST"])
-def reset_password():
-    data = request.get_json(silent=True) or {}
-
-    email = (data.get("email") or "").strip()
-    new_password = data.get("new_password")
-    confirm_password = data.get("confirm_password")
-
-    if not email or not new_password or not confirm_password:
-        return jsonify({"status": "error", "message": "All fields are required"}), 400
-
-    if new_password != confirm_password:
-        return jsonify({"status": "error", "message": "Passwords do not match"}), 400
-
-    missing_requirements = validate_password(new_password)
-    if missing_requirements:
-        return jsonify({
-            "status": "error",
-            "message": f"Password must contain: {', '.join(missing_requirements)}"
-        }), 400
-
-    hashed_password = generate_password_hash(new_password)
-
-    conn = get_connection()
-    if not conn:
-        return jsonify({"status": "error", "message": "DB connection failed"}), 500
-
-    try:
-        with conn.cursor() as cursor:
-
-            cursor.execute(
-                """
-                UPDATE users 
-                SET password_hash=%s, otp=NULL, otp_expiry=NULL
-                WHERE email=%s
-                """,
-                (hashed_password, email)
-            )
-
-            conn.commit()
-
-        return jsonify({
-            "status": "success",
-            "message": "Password reset successfully"
-        }), 200
-
-    finally:
-        conn.close()
-
+            cursor.close()
+            conn.close()
+        except:
+            pass
 # ==========================================================
 # ==========================================================
 # CITIZEN CHECK WATER SOURCE WITH RISK ANALYSIS
@@ -1254,48 +1326,48 @@ def admin_patient_cases():
 # ==========================================================
 # DELETE ACCOUNT API
 # ==========================================================
-@app.route('/delete-account', methods=['POST'])
-def delete_account():
-    try:
-        data = request.get_json()
+# @app.route('/delete-account', methods=['POST'])
+# def delete_account():
+#     try:
+#         data = request.get_json()
 
-        user_id = data.get("user_id")
+#         user_id = data.get("user_id")
 
-        if not user_id:
-            return jsonify({
-                "status": "error",
-                "message": "user_id is required"
-            }), 400
+#         if not user_id:
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "user_id is required"
+#             }), 400
 
-        conn = get_connection()
-        cursor = conn.cursor()
+#         conn = get_connection()
+#         cursor = conn.cursor()
 
-        # Check user exists
-        cursor.execute("SELECT user_id FROM users WHERE user_id=%s", (user_id,))
-        user = cursor.fetchone()
+#         # Check user exists
+#         cursor.execute("SELECT user_id FROM users WHERE user_id=%s", (user_id,))
+#         user = cursor.fetchone()
 
-        if not user:
-            return jsonify({
-                "status": "error",
-                "message": "User not found"
-            }), 404
+#         if not user:
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "User not found"
+#             }), 404
 
-        # Delete user
-        cursor.execute("DELETE FROM users WHERE user_id=%s", (user_id,))
-        conn.commit()
+#         # Delete user
+#         cursor.execute("DELETE FROM users WHERE user_id=%s", (user_id,))
+#         conn.commit()
 
-        conn.close()
+#         conn.close()
 
-        return jsonify({
-            "status": "success",
-            "message": "Account deleted successfully"
-        })
+#         return jsonify({
+#             "status": "success",
+#             "message": "Account deleted successfully"
+#         })
 
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+#     except Exception as e:
+#         return jsonify({
+#             "status": "error",
+#             "message": str(e)
+#         }), 500
 
 # ================= Admin Login API =================
 # ================= Admin Login API =================
@@ -1312,39 +1384,38 @@ def admin_login():
             "message": "Email and password required"
         }), 400
 
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
+    conn = get_connection()
+    cursor = conn.cursor()
 
-        # ✅ Fetch from ADMIN table ONLY
-        sql = "SELECT admin_id, full_name, email, password FROM admin WHERE email=%s"
-        cursor.execute(sql, (email,))
+    try:
+        # ✅ Correct MySQL query
+        cursor.execute(
+            "SELECT * FROM users WHERE email=%s AND role='admin'",
+            (email,)
+        )
         admin = cursor.fetchone()
 
+        # ✅ Correct password check
+        if admin and check_password_hash(admin['password_hash'], password):
+            return jsonify({
+                "status": "success",
+                "message": "Admin login successful",
+                "admin": {
+                    "admin_id": admin['user_id'],
+                    "full_name": admin['full_name'],
+                    "email": admin['email']
+                }
+            }), 200
+
+        return jsonify({
+            "status": "error",
+            "message": "Invalid admin credentials"
+        }), 401
+
+    finally:
         cursor.close()
         conn.close()
 
-        if not admin:
-            return jsonify({
-                "status": "error",
-                "message": "Admin not found"
-            }), 404
-
-        return jsonify({
-            "status": "success",
-            "message": "Admin login successful",
-            "admin": {
-                "admin_id": admin['admin_id'],
-                "full_name": admin['full_name'],
-                "email": admin['email']
-            }
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
 #==============================================   
 
 # ==============================================
