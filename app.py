@@ -1390,8 +1390,8 @@ def admin_login():
     try:
         # ✅ Correct MySQL query
         cursor.execute(
-            "SELECT * FROM users WHERE email=%s AND role='admin'",
-            (email,)
+    "SELECT * FROM users WHERE LOWER(email)=LOWER(%s) AND role='admin'",
+    (email,)
         )
         admin = cursor.fetchone()
 
